@@ -8,14 +8,13 @@ is knowledge of this particular game lives here instead. The two programs talk t
 dumps NCPatcher writes — never through a shared library — so neither repository has to build before
 the other.
 
-Today this manages the **code reference**. Code generation from NCPatcher's dumps comes next.
-
 ```
 nsmbtool reference list          Revisions in the store, and which this project uses
 nsmbtool reference use <rev>     Pin a branch, tag or commit, then sync
 nsmbtool reference sync          Materialise the locked revision and write .ncpatcher.env
 nsmbtool reference path [<rev>]  Print a revision's directory
 nsmbtool reference gc            Remove revisions no known project names
+nsmbtool glue                    Generate the glue headers and the editor contracts
 ```
 
 ## Why a lock file
@@ -109,6 +108,99 @@ reference in place — that changes build inputs without changing the lock, so `
 `gc` removes revisions that no known project's lock names. It leaves the mirror alone, so a revision
 it removed can be checked out again with no network at all. `--dry-run` lists what would go.
 
+## Generating the glue assets
+
+```sh
+nsmbtool glue --graph build/generated/modules.json \
+              --manifest build/generated/files.json \
+              --out build/generated
+```
+
+Those are the defaults, so in a project laid out the ordinary way `nsmbtool glue` on its own does
+the same thing. It reads two NCPatcher dumps — `ncpatcher.modules/1` and `ncpatcher.files/1` — and
+writes:
+
+```
+<out>/include/objectids/<module>.hpp             ObjectID::<Module>::<Name>
+<out>/include/object_registry.hpp                Game::ExtendedObjectsStart / Count
+<out>/include/scene_overlay_registry.hpp         getSceneOverlayID
+<out>/include/fid.hpp                            the ""fid literal, for every file in the ROM
+<out>/include/generated/glue/extended_profiles.hpp
+<out>/include/generated/glue/level_data_getters.hpp
+<out>/include/generated/glue/extended_stageobjects.hpp
+<out>/level_data.json                            nsmbtool.leveldata/1
+<out>/stageobjects.json                          nsmbtool.stageobjects/1
+```
+
+It belongs in a `post-files` hook, not a `pre-build` one: `fid.hpp` can only be written once
+insertion has settled the ROM's file IDs, and it has to exist before the code that references them
+compiles. That point in the build is exactly what the phase is for.
+
+```yaml
+hooks:
+  - name: Generate the glue assets
+    run: nsmbtool glue --graph "${ncp.moduleDump}" --manifest "${ncp.fileDump}"
+    when: post-files
+```
+
+A file is rewritten only when its bytes change. `fid.hpp` is included nearly everywhere, and a hook
+that runs on every build would otherwise give it a newer timestamp than every object file and
+rebuild the project from scratch, every time, for nothing.
+
+### What modules declare
+
+Everything below is passed through by NCPatcher untouched, under `extra` — it has no idea what any
+of it means, which is the point.
+
+```yaml
+# module.yaml
+id: Coop
+
+level-data:              # module level
+  canFly: flag           # present or absent
+  canDie: u32            # a value
+  someArray: u8[8]       # a fixed array
+  someVector: u32[?]     # a count, then that many elements
+
+components:
+  - Vanilla:
+      objects:           # component level
+        - name: CoopFlagActor
+          type: actor    # actor | scene
+          header: coop/actors/CoopFlagActor.hpp
+          stage: [Default, Big]
+```
+
+### Two ID spaces, which are not the same size
+
+|  | Object ID | Stage object ID |
+|---|---|---|
+| Table | `ObjectProfile` / `mainExtPT` | `ObjectInfo` / `extObjInfos` |
+| Base | `0x182` | `325` |
+| Holds | the runtime class — the spawn vtable | placement geometry |
+| Cardinality | one per object | one per `stage:` variant |
+| Allocated by | this tool, at build time | the editor, per level, per unique hash |
+
+`stage: [Default, Big]` is therefore *one* actor class placeable as *two* entries with different
+geometry — `CoopFlagActor::ObjectInfo_Default` and `::ObjectInfo_Big`, both spawning the same class.
+`stageobjects.json` carries no stage object ID at all, because there is no build-time answer to what
+it should be.
+
+**Identity is the hash, not either number.** A level stores the FNV-1a of `module.Object.Variant`,
+and the runtime matches that against the generated table. The `0x182 +` indices are compile-time
+constants that only have to agree with themselves within one build, so renumbering them invalidates
+nothing; a published hash must never change, which makes `module.Object.Variant` naming a
+compatibility surface.
+
+### Three constants
+
+`0x182` is the first object ID past the game's own table, `325` is where the vanilla stage-object
+table ends, and `131` is the overlay count the game subtracts from every file ID it is handed. All
+three are hardcoded here, deliberately: they are facts about how the game is *written*, not about
+whatever ROM is loaded. Deriving `131` from the manifest would be actively wrong — a `create`-mode
+region that adds overlay 131 changes the ROM's overlay count while every existing file ID must stay
+exactly where it is.
+
 ## Building
 
 C++20, CMake, and one dependency: yaml-cpp (found on the system, or fetched). `git` must be on
@@ -129,7 +221,7 @@ boundary where they are handed to Windows, so a store under
 Tests are off by default because they drive the real git:
 
 ```sh
-cmake -S . -B build -DNH_BUILD_TESTS=ON && cmake --build build && ctest --test-dir build
+cmake -S . -B build -DNSMBTOOL_BUILD_TESTS=ON && cmake --build build && ctest --test-dir build
 ```
 
 They use a scratch repository on disk rather than a mock. A mocked git would only confirm that the

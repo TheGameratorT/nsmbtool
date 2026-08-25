@@ -58,7 +58,10 @@ endif()
 # the filesystem at configure time.
 set(SOURCES
 	source/main.cpp
+	source/glue.cpp
+	source/graph.cpp
 	source/lockfile.cpp
+	source/manifest.cpp
 	source/log.cpp
 	source/process.cpp
 	source/project.cpp
@@ -126,6 +129,18 @@ if (NSMBTOOL_BUILD_TESTS)
 		target_link_libraries(process_test PRIVATE shell32)
 	endif()
 	add_test(NAME process COMMAND process_test)
+
+	add_executable(glue_test
+		tests/glue_test.cpp
+		source/glue.cpp
+		source/graph.cpp
+		source/log.cpp
+		source/manifest.cpp
+		source/unicode.cpp
+	)
+	target_compile_features(glue_test PRIVATE cxx_std_20)
+	target_link_libraries(glue_test PRIVATE ${YAML_CPP_TARGET})
+	add_test(NAME glue COMMAND glue_test)
 
 	add_executable(store_test
 		tests/store_test.cpp

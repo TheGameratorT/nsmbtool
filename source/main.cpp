@@ -7,8 +7,9 @@
 // is a separate program with a separate repository and no build-order
 // relationship to the patcher.
 //
-// Today it manages the code reference. The glue code generators come next, and
-// they will read `ncpatcher.modules/1` and `ncpatcher.files/1`.
+// Today it manages the code reference and generates the glue assets, reading
+// `ncpatcher.modules/1` and `ncpatcher.files/1`. The editor backend, when there
+// is one, reads the two contracts `glue` writes alongside them.
 
 #include <cstdio>
 #include <cstdlib>
@@ -26,6 +27,7 @@
 #endif
 
 #include "except.hpp"
+#include "glue.hpp"
 #include "log.hpp"
 #include "reference.hpp"
 #include "unicode.hpp"
@@ -45,12 +47,16 @@ ANSI_bWHITE "Commands\n" ANSI_RESET
 "  " ANSI_bCYAN "reference sync" ANSI_RESET "              Materialise the locked revision and write .ncpatcher.env\n"
 "  " ANSI_bCYAN "reference path" ANSI_RESET " [<rev>]      Print a revision's directory\n"
 "  " ANSI_bCYAN "reference gc" ANSI_RESET "                Remove revisions no known project names\n"
+"  " ANSI_bCYAN "glue" ANSI_RESET "                        Generate the glue headers and editor contracts\n"
 "\n"
 ANSI_bWHITE "Options\n" ANSI_RESET
 "  " ANSI_bCYAN "-C" ANSI_RESET " <dir>                    Act as if started in <dir>\n"
 "  " ANSI_bCYAN "--offline" ANSI_RESET "                   Fail rather than reach the network\n"
 "  " ANSI_bCYAN "--repo" ANSI_RESET " <url>                With " ANSI_bCYAN "use" ANSI_RESET ", change which repository is pinned\n"
 "  " ANSI_bCYAN "--dry-run" ANSI_RESET "                   With " ANSI_bCYAN "gc" ANSI_RESET ", list what would go and remove nothing\n"
+"  " ANSI_bCYAN "--graph" ANSI_RESET " <file>              With " ANSI_bCYAN "glue" ANSI_RESET ", NCPatcher's module dump\n"
+"  " ANSI_bCYAN "--manifest" ANSI_RESET " <file>           With " ANSI_bCYAN "glue" ANSI_RESET ", NCPatcher's file manifest\n"
+"  " ANSI_bCYAN "--out" ANSI_RESET " <dir>                 With " ANSI_bCYAN "glue" ANSI_RESET ", where to write them\n"
 "  " ANSI_bCYAN "--no-color" ANSI_RESET "                  Never write escape sequences\n"
 "  " ANSI_bCYAN "-h" ANSI_RESET ", " ANSI_bCYAN "--help" ANSI_RESET ", " ANSI_bCYAN "--version" ANSI_RESET "\n"
 "\n"
@@ -126,6 +132,14 @@ int main(int argc, char** argv)
 	std::vector<std::string> args = commandLineArguments(argc, argv);
 
 	nsmb::ReferenceOptions options;
+
+	// The defaults are where NCPatcher's own defaults put the dumps, so the
+	// common invocation is `nsmbtool glue` with nothing after it.
+	nsmb::GlueOptions glue;
+	glue.graph = "build/generated/modules.json";
+	glue.manifest = "build/generated/files.json";
+	glue.out = "build/generated";
+
 	std::vector<std::string> positional;
 
 	for (std::size_t i = 0; i < args.size(); i++)
@@ -163,10 +177,23 @@ int main(int argc, char** argv)
 		else if (argument == "-C")
 		{
 			options.directory = valueOf("-C");
+			glue.directory = options.directory;
 		}
 		else if (argument == "--repo")
 		{
 			options.repo = valueOf("--repo");
+		}
+		else if (argument == "--graph")
+		{
+			glue.graph = valueOf("--graph");
+		}
+		else if (argument == "--manifest")
+		{
+			glue.manifest = valueOf("--manifest");
+		}
+		else if (argument == "--out")
+		{
+			glue.out = valueOf("--out");
 		}
 		else if (argument.starts_with("-") && argument != "-")
 		{
@@ -186,6 +213,13 @@ int main(int argc, char** argv)
 
 	try
 	{
+		if (positional[0] == "glue")
+		{
+			if (positional.size() != 1)
+				usageError(ANSI_bCYAN "glue" ANSI_RESET " takes no arguments, only options.");
+			return nsmb::glueGenerate(glue);
+		}
+
 		// `ref` because this one gets typed a lot and the long form is the
 		// documented spelling, not a test of anyone's patience.
 		if (positional[0] != "reference" && positional[0] != "ref")
