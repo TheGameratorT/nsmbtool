@@ -66,6 +66,7 @@ set(SOURCES
 	source/process.cpp
 	source/project.cpp
 	source/reference.cpp
+	source/stamp.cpp
 	source/store.cpp
 	source/unicode.cpp
 )
