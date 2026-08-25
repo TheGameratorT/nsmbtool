@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/TheGameratorT/nsmbtool/main/schema/stageobjects.schema.json",
+  "title": "nsmbtool placeable object catalog",
+  "description": "Every custom object that can be dropped into a level, one entry per `stage:` variant. Written by `nsmbtool glue` from NCPatcher's module dump. This is the palette a level editor offers, and the mapping from what it shows to what it must write.",
+  "type": "object",
+  "required": ["schema", "stageObjectIdBase", "stageObjects"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "nsmbtool.stageobjects/1",
+      "description": "Format identifier and version."
+    },
+    "stageObjectIdBase": {
+      "type": "integer",
+      "description": "Where the vanilla stage object table ends -- 325. An editor allocates stage object ids upward from here, one per distinct hash it places in a level, starting at this number and contiguous. Reported rather than assumed so that a consumer does not hardcode it a second time.",
+      "const": 325
+    },
+    "stageObjects": {
+      "type": "array",
+      "description": "Sorted by module, component, object and variant. An object declaring no `stage:` variants is not placeable and does not appear.",
+      "items": { "$ref": "#/$defs/stageObject" }
+    }
+  },
+  "$defs": {
+    "stageObject": {
+      "type": "object",
+      "required": ["name", "hash", "module", "component", "object", "variant", "objectId", "info", "header"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "`module.Object.Variant` -- `coop.CoopFlagActor.Default`. The durable name of this placeable entry."
+        },
+        "hash": {
+          "type": "string",
+          "pattern": "^0x[0-9a-f]{8}$",
+          "description": "FNV-1a/32 of `name`. THIS IS WHAT A LEVEL STORES, and the only thing here that is stable across builds. Neither id below is: they are compile-time or per-level numbers that have to agree with themselves and nothing more. So a published hash must never change, and `module.Object.Variant` is a compatibility surface -- renaming any of the three parts orphans every level that placed it."
+        },
+        "module": { "type": "string" },
+        "component": {
+          "type": "string",
+          "description": "The component that declares the object. A level may place an entry whose component the ROM was built without; the runtime finds no matching hash and the object does not appear."
+        },
+        "object": {
+          "type": "string",
+          "description": "The class name."
+        },
+        "variant": {
+          "type": "string",
+          "description": "Which `stage:` variant of that class this is. One class with `stage: [Default, Big]` is two entries here and one entry in the object table."
+        },
+        "objectId": {
+          "type": "integer",
+          "minimum": 386,
+          "description": "The OBJECT id: which class the game spawns, allocated upward from 0x182 at build time, ONE PER OBJECT. Every variant of one class shares it -- two entries with the same objectId is correct, not a duplicate. Do not confuse this with the stage object id, which is a different number in a different table: see below."
+        },
+        "info": {
+          "type": "string",
+          "description": "The `ObjectInfo` this variant supplies, as a qualified C++ name -- `CoopFlagActor::ObjectInfo_Default`. It holds the placement geometry the game needs at load time, before the actor exists, which is why it is a table rather than something the class could answer for itself."
+        },
+        "header": {
+          "type": "string",
+          "description": "The header declaring the class, relative to a module include directory."
+        }
+      }
+    }
+  }
+}

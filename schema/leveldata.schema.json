@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/TheGameratorT/nsmbtool/main/schema/leveldata.schema.json",
+  "title": "nsmbtool level-data catalog",
+  "description": "Every key a module declares in its `level-data`, with the hash the runtime matches on. Written by `nsmbtool glue` from NCPatcher's module dump. A level editor reads this to know what a level may carry beyond the vanilla format: the keys are the schema of the glue block it writes.",
+  "type": "object",
+  "required": ["schema", "levelData"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "nsmbtool.leveldata/1",
+      "description": "Format identifier and version."
+    },
+    "levelData": {
+      "type": "array",
+      "description": "Sorted by module, then key. A build allocates nothing here, so the order is for reproducible output and readable diffs only.",
+      "items": { "$ref": "#/$defs/entry" }
+    }
+  },
+  "$defs": {
+    "entry": {
+      "type": "object",
+      "required": ["key", "module", "dataType", "hash"],
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "type": "string",
+          "description": "`module.name`, lowercased module id and the key as declared -- `coop.canFly`. This is what the game's code names the key by, and what is hashed."
+        },
+        "module": {
+          "type": "string",
+          "description": "The declaring module's id."
+        },
+        "dataType": {
+          "enum": ["flag", "value", "array", "sizedArray"],
+          "description": "`flag` is presence alone and carries no payload. `value` is one element. `array` is `arraySize` elements. `sizedArray` is a count followed by that many elements, for a length the level decides."
+        },
+        "hash": {
+          "type": "string",
+          "pattern": "^0x[0-9a-f]{8}$",
+          "description": "FNV-1a/32 of `key`, as an 8-digit lowercase hex string. THIS IS THE IDENTITY. The runtime finds a key by scanning the level's glue block for this number; the key's spelling exists only to produce it. A published hash must therefore never change, which makes the key name a compatibility surface: renaming a key silently orphans the data every level already stores under the old one."
+        },
+        "typeName": {
+          "type": "string",
+          "description": "The C++ type of one element, exactly as the module wrote it. Absent for a flag, which has no payload. An editor cannot size a type from its name alone -- a struct here is opaque -- so a key whose type is not one of the fixed-width primitives is editable only by something that knows the type."
+        },
+        "arraySize": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Element count. Present only for `array`."
+        }
+      }
+    }
+  }
+}

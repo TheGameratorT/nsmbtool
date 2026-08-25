@@ -15,6 +15,7 @@ nsmbtool reference sync          Materialise the locked revision and write .ncpa
 nsmbtool reference path [<rev>]  Print a revision's directory
 nsmbtool reference gc            Remove revisions no known project names
 nsmbtool glue                    Generate the glue headers and the editor contracts
+nsmbtool stamp --out <file>      Write the build identifier the crash screen shows
 ```
 
 ## Why a lock file
@@ -200,6 +201,81 @@ three are hardcoded here, deliberately: they are facts about how the game is *wr
 whatever ROM is loaded. Deriving `131` from the manifest would be actively wrong — a `create`-mode
 region that adds overlay 131 changes the ROM's overlay count while every existing file ID must stay
 exactly where it is.
+
+## The build stamp
+
+```sh
+nsmbtool stamp --out build/generated/BUILDTIME
+```
+
+Writes `<short hash> <commit date>` — no trailing newline, because the game reads it as a C string
+and prints it on one line of the crash screen. The result is an ordinary file, put into the ROM
+through NCPatcher's `files:` like any other asset:
+
+```yaml
+files:
+  BUILDTIME: build/generated/BUILDTIME
+
+hooks:
+  - name: Stamp the build
+    run: nsmbtool stamp --out build/generated/BUILDTIME
+    when: pre-build
+```
+
+The date is formatted from git's committer *timestamp*, so it is real UTC rather than whatever wall
+clock the commit was made against. There is no default output path: where a project keeps a
+generated asset is the project's convention, not this tool's.
+
+Running outside a git repository warns and stamps `unknown` rather than failing — a source archive
+has no history — but it says so, because the crash screen is the only place the string is ever read.
+
+## The editor contract
+
+There is no editor. What there is instead is four versioned JSON documents that together describe
+everything one would need, so that the design outlives the decision not to build it yet.
+
+| Document | Written by | Says |
+|---|---|---|
+| `ncpatcher.files/1` | NCPatcher, `files-dump` | the ROM's file table, and which module, component and language each entry came from |
+| `ncpatcher.modules/1` | NCPatcher, `modules.dump` | the resolved module graph, with everything game-specific preserved under `extra` |
+| `nsmbtool.leveldata/1` | `nsmbtool glue` | the keys a level may carry beyond the vanilla format, and their hashes |
+| `nsmbtool.stageobjects/1` | `nsmbtool glue` | the placeable-object palette, one entry per `stage:` variant |
+
+The schemas are in [`schema/`](schema) here and in NCPatcher's `schema/`. Every one carries a
+`schema` field naming its version; a consumer should refuse a version it does not know rather than
+guess, since the failure mode of guessing is a level written wrong.
+
+### How they compose
+
+`ncpatcher.files/1` is a filesystem view that reads as a diff: every entry is either vanilla,
+replaced by a module, or added by one, and grouping by path across the per-variant manifests answers
+which languages translate a given file. A file that exists in a module's tree but not yet in the ROM
+is *pending insertion* — it has no ID, and it cannot be given one from outside.
+
+That last point is the constraint the whole design turns on, and it belongs in any tool built on
+this: **existing file IDs are never renumbered; only `z_new/` additions may move.** A game stores
+file IDs in compiled code, in saves, and in already-published levels. So an editor may add files
+only by putting them in a module tree and letting a build place them, which is exactly why it shows
+them as pending rather than writing into the ROM itself.
+
+`nsmbtool.stageobjects/1` is the palette. What the editor writes into a level for a placed object is
+the **hash**, never either ID:
+
+- `objectId` is which class the game spawns. It is allocated at build time, upward from `0x182`,
+  **one per object** — so two variants of one class share it, and seeing the same `objectId` twice
+  is correct rather than a duplicate.
+- The **stage object ID** is not in the file at all. It is `325 + n`, allocated by the editor, per
+  level, one `n` per distinct hash it places, contiguous from `325`. The runtime indexes its table
+  by `id - 325` and relies on that being contiguous.
+
+`nsmbtool.leveldata/1` is the schema of the block the editor writes alongside those placements. The
+placed objects themselves are one such key — `glue.stageObjects` — declared by the glue module,
+because the code that reads it is glue's own.
+
+Both documents make the same promise and impose the same obligation: **the hash is the identity, and
+a published hash must never change.** `module.Object.Variant` and `module.key` are therefore
+compatibility surfaces. Renaming one does not fail a build; it silently orphans the data every
+existing level stores under the old name.
 
 ## Building
 
