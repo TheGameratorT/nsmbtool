@@ -585,14 +585,18 @@ std::string emitExtendedStageObjects(const GlueModel& model)
 	       "namespace Glue::StageObject {\n"
 	       "\n"
 	       "// One entry per stage: variant. The hash of module.Object.Variant is what a\n"
-	       "// level stores; the 325 + n ids are the editor's, per level, and appear nowhere\n"
-	       "// in this table.\n"
+	       "// level stores; the 326 + n stage object ids are the editor's, per level, and\n"
+	       "// appear nowhere in this table.\n"
+	       "//\n"
+	       "// The id that does appear is the other space entirely: the 0x182 + n object id\n"
+	       "// naming the class this stage object spawns. Two stage: variants of one object\n"
+	       "// share it and differ only in their ObjectInfo.\n"
 	       "ModuleStageObjectInfo moduleStageObjectInfos[] = {\n";
 
 	for (const StageObjectEntry& entry : model.stageObjects)
 	{
-		out << "    MODULE_OBJ(" << hex32(entry.hash) << ", &" << entry.info
-		    << ", \"" << entry.key << "\"),\n";
+		out << "    MODULE_OBJ(" << hex32(entry.hash) << ", " << entry.objectId
+		    << ", &" << entry.info << ", \"" << entry.key << "\"),\n";
 	}
 
 	out << "};\n"

@@ -331,11 +331,15 @@ int main()
 		"namespace Glue::StageObject {\n"
 		"\n"
 		"// One entry per stage: variant. The hash of module.Object.Variant is what a\n"
-		"// level stores; the 325 + n ids are the editor's, per level, and appear nowhere\n"
-		"// in this table.\n"
+		"// level stores; the 326 + n stage object ids are the editor's, per level, and\n"
+		"// appear nowhere in this table.\n"
+		"//\n"
+		"// The id that does appear is the other space entirely: the 0x182 + n object id\n"
+		"// naming the class this stage object spawns. Two stage: variants of one object\n"
+		"// share it and differ only in their ObjectInfo.\n"
 		"ModuleStageObjectInfo moduleStageObjectInfos[] = {\n"
-		"    MODULE_OBJ(0xf46a44b9, &CoopFlagActor::ObjectInfo_Default, \"coop.CoopFlagActor.Default\"),\n"
-		"    MODULE_OBJ(0x27e61112, &CoopFlagActor::ObjectInfo_Big, \"coop.CoopFlagActor.Big\"),\n"
+		"    MODULE_OBJ(0xf46a44b9, 387, &CoopFlagActor::ObjectInfo_Default, \"coop.CoopFlagActor.Default\"),\n"
+		"    MODULE_OBJ(0x27e61112, 387, &CoopFlagActor::ObjectInfo_Big, \"coop.CoopFlagActor.Big\"),\n"
 		"};\n"
 		"\n"
 		"constexpr u32 moduleStageObjectCount = 2;\n"
@@ -422,7 +426,7 @@ int main()
 		const std::string json = nsmb::emitStageObjectsJson(built);
 		check(json.find("\"schema\": \"nsmbtool.stageobjects/1\"") != std::string::npos,
 			"stageobjects.json names its schema");
-		check(json.find("\"stageObjectIdBase\": 325") != std::string::npos,
+		check(json.find("\"stageObjectIdBase\": 326") != std::string::npos,
 			"stageobjects.json states the base the editor allocates from");
 		check(json.find("\"objectId\": 387") != std::string::npos,
 			"stageobjects.json carries the object id, so the editor knows what spawns");

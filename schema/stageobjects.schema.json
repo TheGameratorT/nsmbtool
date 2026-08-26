@@ -13,8 +13,8 @@
     },
     "stageObjectIdBase": {
       "type": "integer",
-      "description": "Where the vanilla stage object table ends -- 325. An editor allocates stage object ids upward from here, one per distinct hash it places in a level, starting at this number and contiguous. Reported rather than assumed so that a consumer does not hardcode it a second time.",
-      "const": 325
+      "description": "Where the vanilla stage object table ends -- 326. An editor allocates stage object ids upward from here, one per distinct hash it places in a level, starting at this number and contiguous. Reported rather than assumed so that a consumer does not hardcode it a second time. Note that the game compares actor ids against 325: that is a sentinel value meaning \"spawns nothing\", not a table bound, and the vanilla tables really do hold 326 entries.",
+      "const": 326
     },
     "stageObjects": {
       "type": "array",

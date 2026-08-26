@@ -25,10 +25,21 @@ namespace nsmb {
 // C++ side keeps seeing the number it always has.
 inline constexpr std::uint16_t OBJECT_ID_BASE = 0x182;
 
-// Where the vanilla stage-object table ends. Editors allocate `325 + n` per
-// level; nothing here does, which is why this constant is only documentation
-// for the contract and never an index.
-inline constexpr std::uint16_t STAGE_OBJECT_ID_BASE = 325;
+// Where the vanilla stage-object tables end. All three of the game's
+// id-indexed tables hold 326 entries, indices 0..325: the code reference
+// declares `objectIDTable[326]`, objectBankTable (0x020C5010) ends where
+// objectInfoTable (0x020C529C) begins 326 * 2 bytes on, and objectInfoTable
+// ends 326 * 20 bytes after that at 0x020C6C14. Row 325 is populated in all
+// three.
+//
+// This was 325 until the tables were disassembled. The game does compare actor
+// ids against 325, but that is a sentinel *value* stored in objectIDTable
+// meaning "spawns nothing"; read as a bound it is off by one and aliases stage
+// object 325, a real vanilla object.
+//
+// Editors allocate `326 + n` per level; nothing here does, which is why this
+// constant is only documentation for the contract and never an index.
+inline constexpr std::uint16_t STAGE_OBJECT_ID_BASE = 326;
 
 // The game subtracts this from every file id it is handed, because the ROM's
 // table counts the 131 overlays before the NitroFS files begin. It cannot be

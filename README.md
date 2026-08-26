@@ -177,7 +177,7 @@ components:
 |  | Object ID | Stage object ID |
 |---|---|---|
 | Table | `ObjectProfile` / `mainExtPT` | `ObjectInfo` / `extObjInfos` |
-| Base | `0x182` | `325` |
+| Base | `0x182` | `326` |
 | Holds | the runtime class — the spawn vtable | placement geometry |
 | Cardinality | one per object | one per `stage:` variant |
 | Allocated by | this tool, at build time | the editor, per level, per unique hash |
@@ -195,7 +195,7 @@ compatibility surface.
 
 ### Three constants
 
-`0x182` is the first object ID past the game's own table, `325` is where the vanilla stage-object
+`0x182` is the first object ID past the game's own table, `326` is where the vanilla stage-object
 table ends, and `131` is the overlay count the game subtracts from every file ID it is handed. All
 three are hardcoded here, deliberately: they are facts about how the game is *written*, not about
 whatever ROM is loaded. Deriving `131` from the manifest would be actively wrong — a `create`-mode
@@ -264,9 +264,13 @@ the **hash**, never either ID:
 - `objectId` is which class the game spawns. It is allocated at build time, upward from `0x182`,
   **one per object** — so two variants of one class share it, and seeing the same `objectId` twice
   is correct rather than a duplicate.
-- The **stage object ID** is not in the file at all. It is `325 + n`, allocated by the editor, per
-  level, one `n` per distinct hash it places, contiguous from `325`. The runtime indexes its table
-  by `id - 325` and relies on that being contiguous.
+- The **stage object ID** is not in the file at all. It is `326 + n`, allocated by the editor, per
+  level, one `n` per distinct hash it places, contiguous from `326`. The runtime indexes its table
+  by `id - 326` and relies on that being contiguous.
+
+  It is `326` and not `325` because the game's three id-indexed tables really do hold 326 entries.
+  The `325` the game compares actor IDs against is a sentinel *value* meaning "spawns nothing", not
+  a table bound.
 
 `nsmbtool.leveldata/1` is the schema of the block the editor writes alongside those placements. The
 placed objects themselves are one such key — `glue.stageObjects` — declared by the glue module,
