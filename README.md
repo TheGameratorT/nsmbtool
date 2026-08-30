@@ -11,7 +11,7 @@ the other.
 ```
 nsmbtool reference list          Revisions in the store, and which this project uses
 nsmbtool reference use <rev>     Pin a branch, tag or commit, then sync
-nsmbtool reference sync          Materialise the locked revision and write .ncpatcher.env
+nsmbtool reference sync          Materialise the locked revision, update .ncpatcher.env
 nsmbtool reference path [<rev>]  Print a revision's directory
 nsmbtool reference gc            Remove revisions no known project names
 nsmbtool glue                    Generate the glue headers and the editor contracts
@@ -65,13 +65,25 @@ nsmbtool reference sync && ncpatcher build --all-variants
 safe to leave in a build script. `--offline` turns a fetch it would have needed into an error
 instead, which is what CI and packaging builds want.
 
-## The generated environment file
+## The environment file
 
-`sync` writes `<project>/.ncpatcher.env`:
+`sync` puts `NSMBREF_ROOT` into `<project>/.ncpatcher.env`, creating the file if it is not there:
 
 ```
+# >>> nsmbtool (managed block, rewritten by `nsmbtool reference sync`)
+# ...
+#   revision  ac823910c51fca86145f6cf136728fa1d5ee6bc7
 NSMBREF_ROOT=/home/you/.local/share/nsmbtool/reference/ac823910c5...
+# <<< nsmbtool
 ```
+
+The file belongs to the project, not to nsmbtool. Only the marked block is rewritten, and every
+other line survives, so your own variables can live there too. `NSMB_NITRO_ROOT` is the usual one:
+the converted Nitro SDK headers are private, cannot be fetched, and their location is a property of
+the machine rather than of the project, which is also why the lock does not mention them. Put it
+outside the block, or keep it in your shell profile, whichever you prefer. The one thing outside
+the block that does not survive a sync is another assignment of `NSMBREF_ROOT`, which would
+override the block.
 
 NCPatcher reads that file before `${env.*}` resolves, and **what is in it overrides the ambient
 environment**. That inversion of the usual dotenv precedence is the whole point: a stale global
@@ -79,14 +91,9 @@ environment**. That inversion of the usual dotenv precedence is the whole point:
 still wins over both — `--var` and the explicit options are the caller deliberately overriding the
 project, one invocation at a time — and `ncpatcher --no-env-file` ignores the file entirely.
 
-**Add `.ncpatcher.env` to `.gitignore`.** It is generated, machine-specific and absolute; committing
-it hands every other clone a directory that does not exist. `sync` says so if you have not.
-
-The file is regenerated in full every time and holds `NSMBREF_ROOT` and nothing else, so anything
-added to it by hand is dropped on the next sync. Machine-specific variables belong in your shell
-profile, `NSMB_NITRO_ROOT` above all: the converted Nitro SDK headers are private, cannot be
-fetched, and their location is a property of the machine rather than of the project. That is also
-why the lock does not mention them.
+**Add `.ncpatcher.env` to `.gitignore`.** The path in it is machine-specific and absolute;
+committing it hands every other clone a directory that does not exist. `sync` says so if you have
+not.
 
 ## The store
 
@@ -245,6 +252,11 @@ The schemas are in [`schema/`](schema) here and in NCPatcher's `schema/`. Every 
 `schema` field naming its version; a consumer should refuse a version it does not know rather than
 guess, since the failure mode of guessing is a level written wrong.
 
+[`docs/porting-to-an-editor.md`](docs/porting-to-an-editor.md) is the other half of that: the
+schemas say what the documents contain, and it says what an editor has to *do* with them — the glue
+block's binary layout and the layouts of it that must be refused, how a stage object is registered
+and placed, and which of an editor's own assumptions break the first time an id goes past 326.
+
 ### How they compose
 
 `ncpatcher.files/1` is a filesystem view that reads as a diff: every entry is either vanilla,
@@ -264,17 +276,30 @@ the **hash**, never either ID:
 - `objectId` is which class the game spawns. It is allocated at build time, upward from `0x182`,
   **one per object** — so two variants of one class share it, and seeing the same `objectId` twice
   is correct rather than a duplicate.
-- The **stage object ID** is not in the file at all. It is `326 + n`, allocated by the editor, per
-  level, one `n` per distinct hash it places, contiguous from `326`. The runtime indexes its table
-  by `id - 326` and relies on that being contiguous.
+- The **stage object ID** is not in the palette at all. It is `326 + n`, allocated by the editor,
+  per level, one `n` per distinct hash it places.
 
   It is `326` and not `325` because the game's three id-indexed tables really do hold 326 entries.
   The `325` the game compares actor IDs against is a sentinel *value* meaning "spawns nothing", not
   a table bound.
 
-`nsmbtool.leveldata/1` is the schema of the block the editor writes alongside those placements. The
-placed objects themselves are one such key — `glue.stageObjects` — declared by the glue module,
-because the code that reads it is glue's own.
+### Where a placed object lives in the level
+
+The placement is an ordinary vanilla `StageObject` in the `StageObjs` block, with an `id` of
+`326 + n`. That block is the only one the game walks, so being in it is what makes the object exist.
+Placing the same object twice is two entries with the same `id`, exactly as for a vanilla object.
+
+The glue block supplies what those IDs mean. `glue.stageObjects` is a flat `u32[?]` of hashes in
+which entry `n` is the hash of the object that ID `326 + n` spawns. The index is the ID, so the
+array holds no IDs itself and one entry covers however many placements refer to it. At load time
+the runtime resolves each hash against the palette and fills its extension of the three tables at
+`n`; a hash this build does not have becomes the `325` sentinel, so that object does not spawn.
+
+**A level that places a module object is only meaningful on a patched ROM.** A vanilla ROM has no
+extension to read: the three tables end at `325`, and an `id` of `326 + n` indexes past them.
+
+`nsmbtool.leveldata/1` is the schema of the block that hash array lives in — `glue.stageObjects` is
+one such key, declared by the glue module because the code that reads it is glue's own.
 
 Both documents make the same promise and impose the same obligation: **the hash is the identity, and
 a published hash must never change.** `module.Object.Variant` and `module.key` are therefore

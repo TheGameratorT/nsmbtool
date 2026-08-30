@@ -285,16 +285,16 @@ int referenceSync(const ReferenceOptions& options)
 		break;
 
 	case EnvFileStanding::Tracked:
-		log::warn(".ncpatcher.env is tracked by git. It holds an absolute path to this machine's\n"
-		          "       store and is rewritten on every sync, so every clone would get a directory\n"
-		          "       that does not exist, and every sync would show up as a change.\n"
+		log::warn(".ncpatcher.env is tracked by git. It names an absolute path into this\n"
+		          "       machine's store, so every clone would get a directory that does not exist,\n"
+		          "       and every sync that moved the reference would show up as a change.\n"
 		          "       Run  " ANSI_bCYAN "git rm --cached .ncpatcher.env" ANSI_RESET "  and add it to .gitignore.");
 		break;
 
 	case EnvFileStanding::Uncovered:
-		log::warn(".ncpatcher.env is not ignored by git. It holds an absolute path to this\n"
-		          "       machine's store and is rewritten on every sync, so committing it hands\n"
-		          "       every other clone a directory that does not exist.\n"
+		log::warn(".ncpatcher.env is not ignored by git. It names an absolute path into this\n"
+		          "       machine's store, so committing it hands every other clone a directory that\n"
+		          "       does not exist.\n"
 		          "       Add it to .gitignore.");
 		break;
 	}

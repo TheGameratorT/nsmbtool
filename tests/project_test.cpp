@@ -1,10 +1,10 @@
 // Tests for source/project.cpp -- finding the project and writing the file
 // NCPatcher reads.
 //
-// The generated .ncpatcher.env is a contract with another program, so its exact
-// text matters: NCPatcher's reader trims, strips one layer of quotes and takes
-// the last assignment of a name. What is checked here is that what this writes
-// survives that reader unchanged.
+// .ncpatcher.env is a contract with another program, so its exact text matters:
+// NCPatcher's reader trims, strips one layer of quotes and takes the last
+// assignment of a name. What is checked here is that what this writes survives
+// that reader unchanged, and that the lines it does not own survive the write.
 
 #include "../source/project.hpp"
 #include "../source/lockfile.hpp"
@@ -44,6 +44,20 @@ static std::string read(const fs::path& file)
 static bool contains(const std::string& text, std::string_view needle)
 {
 	return text.find(needle) != std::string::npos;
+}
+
+// How many assignments the file makes, comments and blank lines aside.
+static std::size_t assignments(const std::string& text)
+{
+	std::size_t count = 0;
+	std::istringstream stream(text);
+	std::string line;
+	while (std::getline(stream, line))
+	{
+		if (!line.empty() && line.front() != '#' && line.find('=') != std::string::npos)
+			count++;
+	}
+	return count;
 }
 
 // The value NCPatcher's reader would end up with for `name`, applying the same
@@ -146,28 +160,88 @@ int main()
 			"writing the same thing again reports none");
 
 		const std::string text = read(file);
-		check(contains(text, "Do not edit, and do not commit"), "the file says it is generated");
-		check(contains(text, "NSMB_NITRO_ROOT"), "and says why the SDK path is not in it");
+		check(contains(text, "# >>> nsmbtool") && contains(text, "# <<< nsmbtool"),
+			"the managed lines are marked as such");
 		check(contains(text, sha), "the revision is recorded in a comment");
 
 		check(envValueAsNcpatcherSeesIt(text, "NSMBREF_ROOT") == reference.generic_string(),
 			"NCPatcher's reader recovers the reference path exactly");
 
-		// Nothing but NSMBREF_ROOT: the file is regenerated wholesale, so a
-		// second variable here would be a promise this cannot keep.
-		std::size_t assignments = 0;
-		std::istringstream stream(text);
-		std::string line;
-		while (std::getline(stream, line))
-		{
-			if (!line.empty() && line.front() != '#' && line.find('=') != std::string::npos)
-				assignments++;
-		}
-		check(assignments == 1, "exactly one variable is written");
+		check(assignments(text) == 1, "exactly one variable is written");
 
 		check(nsmb::writeEnvFile(file, root / "store" / "reference" / std::string(40, 'b'),
 			"https://example.invalid/r", std::string(40, 'b')),
-			"a different revision rewrites the file");
+			"a different revision rewrites the block");
+	}
+
+	// The file belongs to the project. Whatever else is in it stays, and the
+	// block goes where the hand-written assignment was rather than at the end.
+	{
+		const fs::path project = root / "shared";
+		const fs::path file = project / ".ncpatcher.env";
+		const fs::path reference = root / "store" / "reference" / sha;
+
+		touch(file,
+			"# The paths this machine builds with.\n"
+			"NSMB_NITRO_ROOT=/opt/nitro\n"
+			"\n"
+			"NSMBREF_ROOT=/somewhere/stale\n"
+			"\n"
+			"OTHER=kept\n");
+
+		nsmb::writeEnvFile(file, reference, "r", sha);
+		const std::string text = read(file);
+
+		check(contains(text, "# The paths this machine builds with."), "a comment of its own stays");
+		check(envValueAsNcpatcherSeesIt(text, "NSMB_NITRO_ROOT") == "/opt/nitro",
+			"and so does a variable of its own");
+		check(envValueAsNcpatcherSeesIt(text, "OTHER") == "kept",
+			"including one written below the block");
+		check(envValueAsNcpatcherSeesIt(text, "NSMBREF_ROOT") == reference.generic_string(),
+			"the stale assignment is the one that gave way");
+		check(assignments(text) == 3, "and it left nothing behind");
+
+		check(text.find("# >>> nsmbtool") < text.find("OTHER=kept"),
+			"the block took the place of the assignment it replaced");
+	}
+
+	// An assignment left below the block would win over it, so sync takes it out.
+	{
+		const fs::path project = root / "shadowed";
+		const fs::path file = project / ".ncpatcher.env";
+		const fs::path reference = root / "store" / "reference" / sha;
+
+		touch(file, "A=1\n");
+		nsmb::writeEnvFile(file, reference, "r", sha);
+
+		std::ofstream(file, std::ios::binary | std::ios::app) << "NSMBREF_ROOT=/hijacked\n";
+		check(nsmb::writeEnvFile(file, reference, "r", sha), "the shadowing assignment is a change");
+
+		const std::string text = read(file);
+		check(envValueAsNcpatcherSeesIt(text, "NSMBREF_ROOT") == reference.generic_string(),
+			"and the block wins after the sync");
+		check(assignments(text) == 2, "because the duplicate is gone");
+	}
+
+	// Half a block is not something to guess at: closing it would mean deciding
+	// how much of someone's file the block swallows.
+	{
+		const fs::path project = root / "truncated";
+		const fs::path file = project / ".ncpatcher.env";
+
+		touch(file, "# >>> nsmbtool\nNSMBREF_ROOT=/half/written\nKEEP=1\n");
+
+		bool threw = false;
+		try
+		{
+			nsmb::writeEnvFile(file, root / "store" / "reference" / sha, "r", sha);
+		}
+		catch (const std::exception&)
+		{
+			threw = true;
+		}
+		check(threw, "an unterminated block is refused");
+		check(contains(read(file), "KEEP=1"), "and the file is left alone");
 	}
 
 	// A path with a trailing space would otherwise be trimmed away by the

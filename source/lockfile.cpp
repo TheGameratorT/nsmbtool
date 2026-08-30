@@ -124,7 +124,7 @@ void Lockfile::write(const fs::path& file) const
 	out << "# The NSMB code reference this project builds against.\n"
 	    << "#\n"
 	    << "# Commit this file. `nsmbtool reference sync` materialises the revision\n"
-	    << "# below and writes .ncpatcher.env, which NCPatcher reads for NSMBREF_ROOT.\n"
+	    << "# below and puts NSMBREF_ROOT in .ncpatcher.env, which NCPatcher reads.\n"
 	    << "# Change it with `nsmbtool reference use <branch|tag|commit>`.\n"
 	    << "\n"
 	    << "version: " << VERSION << "\n"

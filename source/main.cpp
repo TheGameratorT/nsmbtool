@@ -45,7 +45,7 @@ ANSI_bWHITE "nsmbtool" ANSI_RESET " " ANSI_CYAN "<command>" ANSI_RESET " [option
 ANSI_bWHITE "Commands\n" ANSI_RESET
 "  " ANSI_bCYAN "reference list" ANSI_RESET "              Revisions in the store, and which this project uses\n"
 "  " ANSI_bCYAN "reference use" ANSI_RESET " <rev>         Pin a branch, tag or commit, then sync\n"
-"  " ANSI_bCYAN "reference sync" ANSI_RESET "              Materialise the locked revision and write .ncpatcher.env\n"
+"  " ANSI_bCYAN "reference sync" ANSI_RESET "              Materialise the locked revision, update .ncpatcher.env\n"
 "  " ANSI_bCYAN "reference path" ANSI_RESET " [<rev>]      Print a revision's directory\n"
 "  " ANSI_bCYAN "reference gc" ANSI_RESET "                Remove revisions no known project names\n"
 "  " ANSI_bCYAN "glue" ANSI_RESET "                        Generate the glue headers and editor contracts\n"

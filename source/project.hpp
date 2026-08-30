@@ -27,20 +27,23 @@ struct Project
 // should live.
 [[nodiscard]] Project findProject(const std::filesystem::path& start);
 
-// Writes <project>/.ncpatcher.env with NSMBREF_ROOT and nothing else.
+// Puts NSMBREF_ROOT into <project>/.ncpatcher.env, creating the file if it is
+// not there.
 //
-// The file is generated in full every time and carries a header saying so.
-// Nothing merges into it: it is owned by this tool, and a value someone added by
-// hand would be silently dropped on the next sync, which is worse than never
-// having accepted it. Machine-specific variables -- NSMB_NITRO_ROOT above all --
-// belong in the shell profile, where they survive.
+// The file belongs to the project, not to this tool. Only the marked block is
+// rewritten; every other line is carried across untouched, so a project may
+// keep its own variables there -- NSMB_NITRO_ROOT, say, whose converted SDK
+// headers are private and a property of the machine. The one thing outside the
+// block that does not survive is another assignment of NSMBREF_ROOT, which
+// would override the block, since the reader takes the last assignment of a
+// name.
 //
 // Returns false if the file already said exactly this, so sync can be quiet
 // about doing nothing.
 bool writeEnvFile(const std::filesystem::path& file, const std::filesystem::path& referenceRoot,
 	const std::string& repo, const std::string& rev);
 
-// Whether git would carry .ncpatcher.env into a commit. The file is generated,
+// Whether git would carry .ncpatcher.env into a commit. The path it holds is
 // machine-specific and absolute, so committing it hands every other clone a
 // directory that does not exist.
 enum class EnvFileStanding
