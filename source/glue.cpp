@@ -751,6 +751,16 @@ int glueGenerate(const GlueOptions& options)
 		return path.is_absolute() ? path : start / path;
 	};
 
+	// resolve() always hands back an absolute path, even for the common case
+	// where --out never left "build/generated": the summary should still say
+	// that, not the project's full absolute location on this machine.
+	const auto displayPath = [&](const fs::path& path) {
+		std::error_code error;
+		const fs::path relative = fs::relative(path, start, error);
+		const bool notSubpath = error || relative.empty() || relative.string().starts_with("..");
+		return pathToUtf8Generic(notSubpath ? path : relative);
+	};
+
 	const fs::path graphFile = resolve(options.graph);
 	const fs::path manifestFile = resolve(options.manifest);
 	const fs::path outDir = resolve(options.out);
@@ -814,10 +824,10 @@ int glueGenerate(const GlueOptions& options)
 	log::info(summary.str());
 
 	if (changed == 0)
-		log::info("Everything in " ANSI_bWHITE + pathToUtf8Generic(outDir) + ANSI_RESET " was already up to date.");
+		log::info("Everything in " ANSI_bWHITE + displayPath(outDir) + ANSI_RESET " was already up to date.");
 	else
 		log::info("Wrote " + std::to_string(changed) + " file" + (changed == 1 ? "" : "s")
-			+ " to " ANSI_bWHITE + pathToUtf8Generic(outDir) + ANSI_RESET ".");
+			+ " to " ANSI_bWHITE + displayPath(outDir) + ANSI_RESET ".");
 
 	return 0;
 }
