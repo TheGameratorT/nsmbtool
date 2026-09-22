@@ -176,7 +176,7 @@ int referenceList(const ReferenceOptions& options)
 	{
 		log::out("");
 		log::out(ANSI_bWHITE "Locked" ANSI_RESET " " + abbreviate(lockedRev)
-			+ "  " ANSI_CYAN + pathToUtf8Generic(project.lockPath()) + ANSI_RESET);
+			+ "  " + pathToUtf8Generic(project.lockPath()));
 
 		if (!store.has(lockedRev))
 		{
@@ -234,7 +234,7 @@ int referenceUse(const ReferenceOptions& options, const std::string& revision)
 	lock.write(project.lockPath());
 
 	if (!project.hasLock)
-		log::info("Created " ANSI_bWHITE + pathToUtf8Generic(project.lockPath()) + ANSI_RESET ".");
+		log::info("Created " + pathToUtf8Generic(project.lockPath()) + ".");
 	else if (previous == resolved)
 		log::info("Already pinned to " ANSI_bWHITE + abbreviate(resolved) + ANSI_RESET ".");
 	else
@@ -303,7 +303,7 @@ int referenceSync(const ReferenceOptions& options)
 		log::info("Up to date at " ANSI_bWHITE + abbreviate(lock.rev) + ANSI_RESET ".");
 	else
 		log::info("Reference " ANSI_bWHITE + abbreviate(lock.rev) + ANSI_RESET " at "
-			ANSI_CYAN + pathToUtf8Generic(referenceRoot) + ANSI_RESET);
+			+ pathToUtf8Generic(referenceRoot));
 
 	return 0;
 }

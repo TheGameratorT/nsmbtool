@@ -144,7 +144,7 @@ bool Store::ensureMirror(const std::string& repo, bool offline) const
 		if (url.ok() && trimmed(url.out) != repo)
 		{
 			throw nsmb::exception(
-				"The store's mirror at " ANSI_bWHITE + pathToUtf8Generic(mirror) + ANSI_RESET " tracks\n"
+				"The store's mirror at " + pathToUtf8Generic(mirror) + " tracks\n"
 				"       " + trimmed(url.out) + "\n"
 				"       but this project's lock names\n"
 				"       " + repo + "\n"

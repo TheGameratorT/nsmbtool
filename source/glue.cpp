@@ -767,16 +767,16 @@ int glueGenerate(const GlueOptions& options)
 
 	if (!fs::exists(graphFile))
 	{
-		throw nsmb::exception("No module dump at " ANSI_bWHITE + pathToUtf8Generic(graphFile)
-			+ ANSI_RESET ".\n"
+		throw nsmb::exception("No module dump at " + pathToUtf8Generic(graphFile)
+			+ ".\n"
 			"       NCPatcher writes it where " ANSI_bCYAN "modules.dump" ANSI_RESET
 			" points; pass " ANSI_bCYAN "--graph" ANSI_RESET " if it is elsewhere.");
 	}
 
 	if (!fs::exists(manifestFile))
 	{
-		throw nsmb::exception("No file manifest at " ANSI_bWHITE + pathToUtf8Generic(manifestFile)
-			+ ANSI_RESET ".\n"
+		throw nsmb::exception("No file manifest at " + pathToUtf8Generic(manifestFile)
+			+ ".\n"
 			"       NCPatcher writes it where " ANSI_bCYAN "files.dump" ANSI_RESET
 			" points, after insertion; pass " ANSI_bCYAN "--manifest" ANSI_RESET
 			" if it is elsewhere.");
@@ -824,10 +824,10 @@ int glueGenerate(const GlueOptions& options)
 	log::info(summary.str());
 
 	if (changed == 0)
-		log::info("Everything in " ANSI_bWHITE + displayPath(outDir) + ANSI_RESET " was already up to date.");
+		log::info("Everything in " + displayPath(outDir) + " was already up to date.");
 	else
 		log::info("Wrote " + std::to_string(changed) + " file" + (changed == 1 ? "" : "s")
-			+ " to " ANSI_bWHITE + displayPath(outDir) + ANSI_RESET ".");
+			+ " to " + displayPath(outDir) + ".");
 
 	return 0;
 }
