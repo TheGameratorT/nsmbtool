@@ -816,10 +816,7 @@ int glueGenerate(const GlueOptions& options)
 	        << model.levelData.size() << " level-data key"
 	        << (model.levelData.size() == 1 ? "" : "s") << ", "
 	        << manifest.files.size() << " file id"
-	        << (manifest.files.size() == 1 ? "" : "s");
-	if (!manifest.variant.empty())
-		summary << " for " ANSI_bWHITE << manifest.variant << ANSI_RESET;
-	summary << ".";
+	        << (manifest.files.size() == 1 ? "" : "s") << ".";
 
 	log::info(summary.str());
 
