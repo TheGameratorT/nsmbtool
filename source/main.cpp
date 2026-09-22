@@ -105,10 +105,24 @@ std::vector<std::string> commandLineArguments(int argc, char** argv)
 // Whether escape sequences are worth writing. NO_COLOR is honoured because it
 // is the one convention every tool that grew a --no-color flag eventually
 // agreed on.
+//
+// Run as an NCPatcher hook, stdout is a pipe: isatty() below would say no
+// even when NCPatcher's own console is happily styled. NCPATCHER_COLOR is
+// NCPatcher's answer to that question for whatever it is piping into, so it
+// takes priority over guessing from our own terminal.
 bool shouldColor()
 {
 	if (std::getenv("NO_COLOR") != nullptr)
 		return false;
+
+	if (const char* ncpColor = std::getenv("NCPATCHER_COLOR"))
+	{
+		const std::string value = ncpColor;
+		if (value == "always")
+			return true;
+		if (value == "never")
+			return false;
+	}
 
 #ifdef _WIN32
 	if (_isatty(_fileno(stdout)) == 0)
@@ -129,6 +143,7 @@ bool shouldColor()
 
 int main(int argc, char** argv)
 {
+	nsmb::log::adoptNcpatcherStyleFromEnvironment();
 	nsmb::log::setColorEnabled(shouldColor());
 
 	std::vector<std::string> args = commandLineArguments(argc, argv);

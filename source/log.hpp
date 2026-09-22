@@ -31,6 +31,15 @@ namespace nsmb::log {
 void setColorEnabled(bool enabled);
 [[nodiscard]] bool colorEnabled();
 
+// Adopts NCPatcher's own console conventions when run as one of its hooks:
+// no bracketed severity tags, "warning: "/"error: " prefixes instead, and
+// info lines indented to line up under NCPatcher's own milestone messages
+// rather than tagged as their own thing. Reads NCPATCHER_LOG_STYLE and
+// NCPATCHER_LOG_INDENT (this tool prints no verb-column milestones of its
+// own, so NCPATCHER_LOG_COLUMN does not apply) from the environment; a
+// standalone run (NCPATCHER_LOG_STYLE unset) keeps the [Info] style.
+void adoptNcpatcherStyleFromEnvironment();
+
 // Strips escape sequences when colour is off. Everything below funnels through
 // this, so a message can be written with the macros unconditionally.
 [[nodiscard]] std::string paint(std::string text);
