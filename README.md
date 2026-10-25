@@ -16,6 +16,8 @@ nsmbtool reference path [<rev>]  Print a revision's directory
 nsmbtool reference gc            Remove revisions no known project names
 nsmbtool glue                    Generate the glue headers and the editor contracts
 nsmbtool stamp --out <file>      Write the build identifier the crash screen shows
+nsmbtool xdelta --source <rom> --target <rom> --out <file>
+                                 Write an xdelta patch between two ROMs
 ```
 
 ## Why a lock file
@@ -235,6 +237,28 @@ generated asset is the project's convention, not this tool's.
 
 Running outside a git repository warns and stamps `unknown` rather than failing — a source archive
 has no history — but it says so, because the crash screen is the only place the string is ever read.
+
+## The xdelta patch
+
+```sh
+nsmbtool xdelta --source rom.nds --target build/nds/rom.nds --out build/xdelta/rom.xdelta
+```
+
+Writes the patch that turns `--source` (the clean ROM players already own) into `--target` (this
+build). It exists so the hook that distributes patches is the same line on every platform: the
+directory for `--out` is created when missing, and the encoder is spawned directly rather than
+through a shell, so there is no `mkdir -p` or `&&` for cmd to choke on.
+
+```yaml
+hooks:
+  - name: Write the xdelta patch
+    run: nsmbtool xdelta --source rom.nds --target "${rom.output}" --out build/xdelta/rom_${variant.name}.xdelta
+    when: post-build
+```
+
+The encoding itself is still [xdelta3](https://github.com/jmacd/xdelta), which has to be on `PATH`.
+Relative paths are the project's, not the current directory's. A failed encode removes its output,
+so a truncated patch is never left looking like a good one.
 
 ## The editor contract
 

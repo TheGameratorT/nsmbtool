@@ -69,6 +69,7 @@ set(SOURCES
 	source/stamp.cpp
 	source/store.cpp
 	source/unicode.cpp
+	source/xdelta.cpp
 )
 
 add_executable(nsmbtool ${SOURCES})

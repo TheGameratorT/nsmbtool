@@ -32,6 +32,7 @@
 #include "reference.hpp"
 #include "stamp.hpp"
 #include "unicode.hpp"
+#include "xdelta.hpp"
 
 namespace {
 
@@ -50,6 +51,7 @@ ANSI_bWHITE "Commands\n" ANSI_RESET
 "  " ANSI_bCYAN "reference gc" ANSI_RESET "                Remove revisions no known project names\n"
 "  " ANSI_bCYAN "glue" ANSI_RESET "                        Generate the glue headers and editor contracts\n"
 "  " ANSI_bCYAN "stamp" ANSI_RESET "                       Write the build identifier the crash screen shows\n"
+"  " ANSI_bCYAN "xdelta" ANSI_RESET "                      Write an xdelta patch between two ROMs\n"
 "\n"
 ANSI_bWHITE "Options\n" ANSI_RESET
 "  " ANSI_bCYAN "-C" ANSI_RESET " <dir>                    Act as if started in <dir>\n"
@@ -58,7 +60,9 @@ ANSI_bWHITE "Options\n" ANSI_RESET
 "  " ANSI_bCYAN "--dry-run" ANSI_RESET "                   With " ANSI_bCYAN "gc" ANSI_RESET ", list what would go and remove nothing\n"
 "  " ANSI_bCYAN "--graph" ANSI_RESET " <file>              With " ANSI_bCYAN "glue" ANSI_RESET ", NCPatcher's module dump\n"
 "  " ANSI_bCYAN "--manifest" ANSI_RESET " <file>           With " ANSI_bCYAN "glue" ANSI_RESET ", NCPatcher's file manifest\n"
-"  " ANSI_bCYAN "--out" ANSI_RESET " <path>                Where " ANSI_bCYAN "glue" ANSI_RESET " and " ANSI_bCYAN "stamp" ANSI_RESET " write\n"
+"  " ANSI_bCYAN "--source" ANSI_RESET " <file>             With " ANSI_bCYAN "xdelta" ANSI_RESET ", the ROM the patch applies to\n"
+"  " ANSI_bCYAN "--target" ANSI_RESET " <file>             With " ANSI_bCYAN "xdelta" ANSI_RESET ", the ROM the patch produces\n"
+"  " ANSI_bCYAN "--out" ANSI_RESET " <path>                Where " ANSI_bCYAN "glue" ANSI_RESET ", " ANSI_bCYAN "stamp" ANSI_RESET " and " ANSI_bCYAN "xdelta" ANSI_RESET " write\n"
 "  " ANSI_bCYAN "--no-color" ANSI_RESET "                  Never write escape sequences\n"
 "  " ANSI_bCYAN "-h" ANSI_RESET ", " ANSI_bCYAN "--help" ANSI_RESET ", " ANSI_bCYAN "--version" ANSI_RESET "\n"
 "\n"
@@ -161,6 +165,10 @@ int main(int argc, char** argv)
 	// project's convention, and this tool has no business inventing one.
 	nsmb::StampOptions stamp;
 
+	// `xdelta` gets no defaults either: which ROMs to compare is the project's
+	// business.
+	nsmb::XdeltaOptions xdelta;
+
 	std::vector<std::string> positional;
 
 	for (std::size_t i = 0; i < args.size(); i++)
@@ -200,6 +208,7 @@ int main(int argc, char** argv)
 			options.directory = valueOf("-C");
 			glue.directory = options.directory;
 			stamp.directory = options.directory;
+			xdelta.directory = options.directory;
 		}
 		else if (argument == "--repo")
 		{
@@ -213,6 +222,14 @@ int main(int argc, char** argv)
 		{
 			glue.manifest = valueOf("--manifest");
 		}
+		else if (argument == "--source")
+		{
+			xdelta.source = valueOf("--source");
+		}
+		else if (argument == "--target")
+		{
+			xdelta.target = valueOf("--target");
+		}
 		else if (argument == "--out")
 		{
 			// Shared, because only one command runs. glue keeps its default
@@ -220,6 +237,7 @@ int main(int argc, char** argv)
 			const std::string value = valueOf("--out");
 			glue.out = value;
 			stamp.out = value;
+			xdelta.out = value;
 		}
 		else if (argument.starts_with("-") && argument != "-")
 		{
@@ -251,6 +269,13 @@ int main(int argc, char** argv)
 			if (positional.size() != 1)
 				usageError(ANSI_bCYAN "stamp" ANSI_RESET " takes no arguments, only options.");
 			return nsmb::stampWrite(stamp);
+		}
+
+		if (positional[0] == "xdelta")
+		{
+			if (positional.size() != 1)
+				usageError(ANSI_bCYAN "xdelta" ANSI_RESET " takes no arguments, only options.");
+			return nsmb::xdeltaWrite(xdelta);
 		}
 
 		// `ref` because this one gets typed a lot and the long form is the
