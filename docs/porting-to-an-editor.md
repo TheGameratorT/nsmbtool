@@ -175,6 +175,10 @@ the wrong geometry rather than a clean failure.
 `stage: [Default, Big]` is one class placeable as two entries with different geometry. Two palette
 entries with the same `objectId` is correct, not a duplicate.
 
+An entry's `runtime` names the runtime module its class is in, or is null. The game loads that
+module when a level places the entry, so it changes nothing about how an editor registers or places
+it. An older palette without the field means null.
+
 ### What a level stores
 
 Two separate things, in two separate places:

@@ -18,6 +18,10 @@ struct ManifestFile
 {
 	std::uint32_t id = 0;
 	std::string path;
+
+	// The runtime module whose image this file is, as in `actors` for
+	// `rt:actors`, or empty for any other file.
+	std::string runtimeModule;
 };
 
 struct Manifest

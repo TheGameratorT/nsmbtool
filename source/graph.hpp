@@ -41,6 +41,11 @@ struct ComponentDef
 	// resident, which is what the scene registry exists to say.
 	std::optional<int> overlay;
 
+	// The runtime module the component's code is linked into, as in
+	// `arm9(rt:actors)`, or empty. Its objects exist only while that module is
+	// loaded, so the main binary cannot point at their profiles.
+	std::string runtime;
+
 	std::vector<ObjectDef> objects;
 };
 

@@ -62,6 +62,10 @@
         "header": {
           "type": "string",
           "description": "The header declaring the class, relative to a module include directory."
+        },
+        "runtime": {
+          "type": ["string", "null"],
+          "description": "The runtime module the class is in, as `bosses` for `rt:bosses`, or null for one in the main binary. The game loads that module when a level places this entry, so an editor needs nothing from it to place one; it is here to say where the code lives. Absent from documents written before it was added, which means null."
         }
       }
     }

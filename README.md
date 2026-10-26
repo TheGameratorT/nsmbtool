@@ -138,6 +138,8 @@ writes:
 <out>/include/generated/glue/extended_profiles.hpp
 <out>/include/generated/glue/level_data_getters.hpp
 <out>/include/generated/glue/extended_stageobjects.hpp
+<out>/include/generated/glue/runtime_modules.hpp
+<out>/include/generated/glue/runtime/<name>.hpp  one per runtime module that holds objects
 <out>/level_data.json                            nsmbtool.leveldata/1
 <out>/stageobjects.json                          nsmbtool.stageobjects/1
 ```
@@ -201,6 +203,49 @@ and the runtime matches that against the generated table. The `0x182 +` indices 
 constants that only have to agree with themselves within one build, so renumbering them invalidates
 nothing; a published hash must never change, which makes `module.Object.Variant` naming a
 compatibility surface.
+
+### Objects in a runtime module
+
+A component whose target is a runtime module, as in `arm9(rt:bosses)`, is not in the main binary,
+and neither are its objects' profiles. Glue loads the module when a level places one of its stage
+objects, and drops it with the level, so nothing changes in `module.yaml` but the target:
+
+```yaml
+runtime:
+  bosses: { file: z_new/ncprt/bosses.ncrt }
+
+components:
+  - Bosses:
+      target: arm9(rt:bosses)
+      objects:
+        - name: BossActor
+          header: coop/actors/BossActor.hpp
+          stage: [Default]
+        - name: BossFireball       # spawned by BossActor, never placed
+          header: coop/actors/BossFireball.hpp
+```
+
+For these objects:
+
+- `extended_profiles.hpp` leaves their rows of `mainExtPT` null, and Glue fills them while the
+  module is loaded.
+- `extended_stageobjects.hpp` gives each stage object the index of the module it needs.
+- `runtime_modules.hpp` lists each module with the file id it is loaded by. That id is the one file
+  the manifest marks with `runtime-module`.
+- `runtime/<name>.hpp` is the module's `ncprt_exports`, which hands Glue the profiles.
+
+The module includes that last one through Glue, in one of its source files:
+
+```cpp
+#include "glue/runtime_module.hpp"
+```
+
+NCPatcher compiles a runtime module with `NCP_RUNTIME_MODULE` defined to its name, which is how
+Glue knows which file to include.
+
+A scene cannot be in a runtime module, since nothing loads a module for a scene. A module needs at
+least one object with a `stage:` variant, since placing one is the only thing that loads it. It
+also needs exactly one NitroFS `file`, since Glue loads it by file id.
 
 ### Three constants
 

@@ -194,6 +194,10 @@ Graph readGraph(const fs::path& file)
 				}
 			}
 
+			const YAML::Node runtime = child(child(componentNode, "target"), "runtime");
+			if (runtime && runtime.IsScalar())
+				component.runtime = runtime.Scalar();
+
 			const std::string where = moduleWhere + "'s component "
 				ANSI_bWHITE + component.name + ANSI_RESET;
 

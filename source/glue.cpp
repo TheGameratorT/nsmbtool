@@ -229,6 +229,7 @@ GlueModel buildModel(const Graph& graph)
 				entry.type = object.type;
 				entry.header = object.header;
 				entry.overlay = component.overlay;
+				entry.runtime = component.runtime;
 				entry.stage = object.stage;
 				model.objects.push_back(std::move(entry));
 			}
@@ -301,6 +302,53 @@ GlueModel buildModel(const Graph& graph)
 		}
 	}
 
+	// A runtime module is loaded when a level places one of its stage objects,
+	// and by nothing else. A scene is never placed, so it would never run; a
+	// module with no stage object at all would never be loaded. An object with
+	// no stage variant is fine next to one that has, since whatever the level
+	// placed can spawn it.
+	std::map<std::string, bool> placeable;
+	for (const ObjectEntry& object : model.objects)
+	{
+		if (object.runtime.empty())
+			continue;
+
+		if (object.type == "scene")
+		{
+			throw nsmb::exception("The scene " ANSI_bWHITE + object.module + "::" + object.name
+				+ ANSI_RESET " is in the runtime module " ANSI_bWHITE "rt:" + object.runtime
+				+ ANSI_RESET ".\n"
+				"       Glue loads a runtime module only for a level's stage objects, so a scene in"
+				" one would never run.");
+		}
+
+		placeable[object.runtime] = placeable[object.runtime] || !object.stage.empty();
+	}
+
+	for (const auto& [name, anyPlaceable] : placeable)
+	{
+		if (!anyPlaceable)
+		{
+			throw nsmb::exception("No object in the runtime module " ANSI_bWHITE "rt:" + name
+				+ ANSI_RESET " has a " ANSI_bCYAN "stage" ANSI_RESET " variant.\n"
+				"       Glue loads a runtime module when a level places one of its stage objects,"
+				" so this one would never be loaded.");
+		}
+		model.runtimeModules.push_back(RuntimeModuleEntry{ name, 0 });
+	}
+
+	for (StageObjectEntry& entry : model.stageObjects)
+	{
+		const ObjectEntry& object = *std::find_if(model.objects.begin(), model.objects.end(),
+			[&](const ObjectEntry& o) { return o.id == entry.objectId; });
+		if (object.runtime.empty())
+			continue;
+
+		const auto found = std::find_if(model.runtimeModules.begin(), model.runtimeModules.end(),
+			[&](const RuntimeModuleEntry& module) { return module.name == object.runtime; });
+		entry.runtime = std::size_t(found - model.runtimeModules.begin());
+	}
+
 	for (const ModuleDef& module : graph.modules)
 	{
 		if (!module.enabled)
@@ -350,6 +398,45 @@ GlueModel buildModel(const Graph& graph)
 	}
 
 	return model;
+}
+
+void resolveRuntimeFiles(GlueModel& model, const Manifest& manifest)
+{
+	for (RuntimeModuleEntry& module : model.runtimeModules)
+	{
+		const ManifestFile* image = nullptr;
+		for (const ManifestFile& file : manifest.files)
+		{
+			if (file.runtimeModule != module.name)
+				continue;
+
+			if (image != nullptr)
+			{
+				throw nsmb::exception("The runtime module " ANSI_bWHITE "rt:" + module.name + ANSI_RESET
+					" is written to both " ANSI_bWHITE + image->path + ANSI_RESET " and "
+					ANSI_bWHITE + file.path + ANSI_RESET ".\n"
+					"       Glue loads it by one file id, so give it one " ANSI_bCYAN "file" ANSI_RESET ".");
+			}
+			image = &file;
+		}
+
+		if (image == nullptr)
+		{
+			throw nsmb::exception("The runtime module " ANSI_bWHITE "rt:" + module.name + ANSI_RESET
+				" holds objects but is not written into the ROM.\n"
+				"       Glue loads it by file id, so give it a " ANSI_bCYAN "file" ANSI_RESET
+				" under the module's " ANSI_bCYAN "runtime" ANSI_RESET " key or in its region.");
+		}
+
+		if (image->id < FILE_ID_OFFSET)
+		{
+			throw nsmb::exception("The runtime module " ANSI_bWHITE "rt:" + module.name + ANSI_RESET
+				" is written to file id " + std::to_string(image->id) + ", which is below the "
+				+ std::to_string(FILE_ID_OFFSET) + " overlays the game offsets by.");
+		}
+
+		module.fileId = image->id;
+	}
 }
 
 std::string emitObjectIds(const GlueModel& model, const std::string& moduleId)
@@ -409,6 +496,10 @@ std::string emitExtendedProfiles(const GlueModel& model)
 	std::vector<std::string> included;
 	for (const ObjectEntry& object : model.objects)
 	{
+		// The profile of an object in a runtime module is in the module, which
+		// the main binary cannot link to, so its header has nothing to give.
+		if (!object.runtime.empty())
+			continue;
 		if (std::find(included.begin(), included.end(), object.header) != included.end())
 			continue;
 		included.push_back(object.header);
@@ -418,11 +509,24 @@ std::string emitExtendedProfiles(const GlueModel& model)
 	out << "\n"
 	       "namespace Glue::Object {\n"
 	       "\n"
-	       "// Generated extended profile table\n"
-	       "const ObjectProfile* mainExtPT[] = {\n";
+	       "// Generated extended profile table\n";
+
+	if (!model.runtimeModules.empty())
+	{
+		out << "// A row left null is an object in a runtime module, filled in while that\n"
+		       "// module is loaded.\n";
+	}
+
+	out << "const ObjectProfile* mainExtPT[] = {\n";
 
 	for (const ObjectEntry& object : model.objects)
 	{
+		if (!object.runtime.empty())
+		{
+			out << "    nullptr,  // " << object.name << " (" << hexId(object.id)
+			    << ") in rt:" << object.runtime << "\n";
+			continue;
+		}
 		out << "    &" << object.name << "::Profile,  // " << object.name
 		    << " (" << hexId(object.id) << ")\n";
 	}
@@ -595,8 +699,12 @@ std::string emitExtendedStageObjects(const GlueModel& model)
 
 	for (const StageObjectEntry& entry : model.stageObjects)
 	{
-		out << "    MODULE_OBJ(" << hex32(entry.hash) << ", " << entry.objectId
-		    << ", &" << entry.info << ", \"" << entry.key << "\"),\n";
+		out << "    MODULE_OBJ(" << hex32(entry.hash) << ", " << entry.objectId << ", ";
+		if (entry.runtime.has_value())
+			out << *entry.runtime;
+		else
+			out << "Glue::Runtime::None";
+		out << ", &" << entry.info << ", \"" << entry.key << "\"),\n";
 	}
 
 	out << "};\n"
@@ -728,6 +836,9 @@ std::string emitStageObjectsJson(const GlueModel& model)
 		       "      \"object\": " << jsonString(entry.object) << ",\n"
 		       "      \"variant\": " << jsonString(entry.variant) << ",\n"
 		       "      \"objectId\": " << entry.objectId << ",\n"
+		       "      \"runtime\": "
+		    << (entry.runtime.has_value() ? jsonString(model.runtimeModules[*entry.runtime].name) : "null")
+		    << ",\n"
 		       "      \"info\": " << jsonString(entry.info) << ",\n"
 		       "      \"header\": " << jsonString(entry.header) << "\n"
 		       "    }" << (i + 1 == model.stageObjects.size() ? "" : ",") << "\n";
@@ -735,6 +846,97 @@ std::string emitStageObjectsJson(const GlueModel& model)
 
 	out << "  ]\n"
 	       "}\n";
+	return out.str();
+}
+
+std::string emitRuntimeModules(const GlueModel& model)
+{
+	std::ostringstream out;
+	out << "#pragma once\n"
+	       "\n"
+	       "// Generated runtime module table\n"
+	       "// Do not edit this file directly\n"
+	       "\n";
+
+	if (model.runtimeModules.empty())
+	{
+		out << "// No object is in a runtime module, so there is no table and nothing to load.\n"
+		       "#define GLUE_RUNTIME_NONE\n";
+		return out.str();
+	}
+
+	out << "namespace Glue::Runtime {\n"
+	       "\n"
+	       "// Indexed by a stage object's runtime field. The file id is the game's, as\n"
+	       "// \"\"fid gives it.\n"
+	       "constexpr ModuleFile runtimeModules[] = {\n";
+
+	for (const RuntimeModuleEntry& module : model.runtimeModules)
+		out << "    { " << (module.fileId - FILE_ID_OFFSET) << ", \"" << module.name << "\" },\n";
+
+	out << "};\n"
+	       "\n"
+	       "constexpr u32 runtimeModuleCount = " << model.runtimeModules.size() << ";\n"
+	       "\n"
+	       "}\n";
+	return out.str();
+}
+
+std::string emitRuntimeExports(const GlueModel& model, std::size_t module)
+{
+	const std::string& name = model.runtimeModules.at(module).name;
+
+	std::vector<const ObjectEntry*> objects;
+	for (const ObjectEntry& object : model.objects)
+	{
+		if (object.runtime == name)
+			objects.push_back(&object);
+	}
+
+	std::ostringstream out;
+	out << "#pragma once\n"
+	       "\n"
+	       "// Generated exports for runtime module: " << name << "\n"
+	       "// Do not edit this file directly\n"
+	       "\n"
+	       "#include \"glue/runtime.hpp\"\n";
+
+	std::vector<std::string> modules;
+	for (const ObjectEntry* object : objects)
+	{
+		if (std::find(modules.begin(), modules.end(), object->module) == modules.end())
+			modules.push_back(object->module);
+	}
+	for (const std::string& moduleId : modules)
+		out << "#include \"objectids/" << lower(moduleId) << ".hpp\"\n";
+
+	std::vector<std::string> included;
+	for (const ObjectEntry* object : objects)
+	{
+		if (std::find(included.begin(), included.end(), object->header) != included.end())
+			continue;
+		included.push_back(object->header);
+		out << "#include \"" << object->header << "\"\n";
+	}
+
+	out << "\n"
+	       "namespace Glue::Runtime {\n"
+	       "\n"
+	       "// What Glue puts in its profile table while this module is loaded.\n"
+	       "static const Entry moduleEntries[] = {\n";
+
+	for (const ObjectEntry* object : objects)
+	{
+		out << "    { ObjectID::" << object->module << "::" << object->name << ", &"
+		    << object->name << "::Profile },\n";
+	}
+
+	out << "};\n"
+	       "\n"
+	       "}\n"
+	       "\n"
+	       "ncprt_exports(const Glue::Runtime::Exports) = { " << objects.size()
+	    << ", Glue::Runtime::moduleEntries };\n";
 	return out.str();
 }
 
@@ -784,7 +986,8 @@ int glueGenerate(const GlueOptions& options)
 
 	const Graph graph = readGraph(graphFile);
 	const Manifest manifest = readManifest(manifestFile);
-	const GlueModel model = buildModel(graph);
+	GlueModel model = buildModel(graph);
+	resolveRuntimeFiles(model, manifest);
 
 	// include/ is what the project puts on the compiler's include path, and
 	// generated/glue/ sits under it because glue/level.hpp includes its getters
@@ -806,6 +1009,12 @@ int glueGenerate(const GlueOptions& options)
 	changed += writeIfChanged(generated / "extended_profiles.hpp", emitExtendedProfiles(model)) ? 1 : 0;
 	changed += writeIfChanged(generated / "level_data_getters.hpp", emitLevelDataGetters(model)) ? 1 : 0;
 	changed += writeIfChanged(generated / "extended_stageobjects.hpp", emitExtendedStageObjects(model)) ? 1 : 0;
+	changed += writeIfChanged(generated / "runtime_modules.hpp", emitRuntimeModules(model)) ? 1 : 0;
+	for (std::size_t i = 0; i < model.runtimeModules.size(); i++)
+	{
+		changed += writeIfChanged(generated / "runtime" / (model.runtimeModules[i].name + ".hpp"),
+			emitRuntimeExports(model, i)) ? 1 : 0;
+	}
 	changed += writeIfChanged(outDir / "level_data.json", emitLevelDataJson(model)) ? 1 : 0;
 	changed += writeIfChanged(outDir / "stageobjects.json", emitStageObjectsJson(model)) ? 1 : 0;
 
@@ -814,8 +1023,13 @@ int glueGenerate(const GlueOptions& options)
 	        << model.stageObjects.size() << " stage object"
 	        << (model.stageObjects.size() == 1 ? "" : "s") << ", "
 	        << model.levelData.size() << " level-data key"
-	        << (model.levelData.size() == 1 ? "" : "s") << ", "
-	        << manifest.files.size() << " file id"
+	        << (model.levelData.size() == 1 ? "" : "s") << ", ";
+	if (!model.runtimeModules.empty())
+	{
+		summary << model.runtimeModules.size() << " runtime module"
+		        << (model.runtimeModules.size() == 1 ? "" : "s") << ", ";
+	}
+	summary << manifest.files.size() << " file id"
 	        << (manifest.files.size() == 1 ? "" : "s") << ".";
 
 	log::info(summary.str());

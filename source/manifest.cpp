@@ -94,6 +94,10 @@ Manifest readManifest(const fs::path& file)
 				ANSI_bWHITE + id.Scalar() + ANSI_RESET ", which is not a file id.");
 		}
 
+		const YAML::Node runtimeModule = node["runtime-module"];
+		if (runtimeModule && runtimeModule.IsScalar())
+			entry.runtimeModule = runtimeModule.Scalar();
+
 		manifest.files.push_back(std::move(entry));
 	}
 

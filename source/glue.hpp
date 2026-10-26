@@ -84,6 +84,7 @@ struct ObjectEntry
 	std::string type;       // actor | scene
 	std::string header;
 	std::optional<int> overlay;
+	std::string runtime;  // actors, for a component in arm9(rt:actors); else empty
 	std::vector<std::string> stage;
 	std::uint16_t id = 0;
 };
@@ -99,6 +100,21 @@ struct StageObjectEntry
 	std::string header;
 
 	std::string module, component, object, variant;
+
+	// The index in GlueModel::runtimeModules of the module that has to be
+	// loaded before this can spawn, or none for an object in the main binary.
+	std::optional<std::size_t> runtime;
+};
+
+// A runtime module that holds objects. Glue loads it when a level places one
+// of its stage objects, and drops it with the level.
+struct RuntimeModuleEntry
+{
+	std::string name;  // actors, for rt:actors
+
+	// The raw id of its NitroFS file, which only the manifest knows. Zero until
+	// resolveRuntimeFiles fills it.
+	std::uint32_t fileId = 0;
 };
 
 struct LevelDataEntry
@@ -116,6 +132,9 @@ struct GlueModel
 	std::vector<StageObjectEntry> stageObjects;
 	std::vector<LevelDataEntry> levelData;
 
+	// Sorted by name, so an index stays put while the set of modules does.
+	std::vector<RuntimeModuleEntry> runtimeModules;
+
 	// The module ids that own at least one object, in the order the object list
 	// first mentions them. What the registry's #includes are generated from.
 	[[nodiscard]] std::vector<std::string> objectModules() const;
@@ -126,6 +145,11 @@ struct GlueModel
 // constants that only have to agree with themselves within one build, so
 // renumbering them invalidates nothing.
 [[nodiscard]] GlueModel buildModel(const Graph& graph);
+
+// Gives each runtime module the id of the one file the manifest marks as its
+// image. Throws when a module has no such file, or more than one: Glue loads it
+// by that id, so it has to be exactly one.
+void resolveRuntimeFiles(GlueModel& model, const Manifest& manifest);
 
 // Each emitter returns a whole file. They are separate from writing so that a
 // test can compare text without a filesystem, and so that an unchanged file is
@@ -140,6 +164,8 @@ struct GlueModel
 [[nodiscard]] std::string emitFileIds(const Manifest& manifest);
 [[nodiscard]] std::string emitLevelDataJson(const GlueModel& model);
 [[nodiscard]] std::string emitStageObjectsJson(const GlueModel& model);
+[[nodiscard]] std::string emitRuntimeModules(const GlueModel& model);
+[[nodiscard]] std::string emitRuntimeExports(const GlueModel& model, std::size_t module);
 
 struct GlueOptions
 {
