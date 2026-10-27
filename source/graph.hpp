@@ -54,6 +54,7 @@ struct LevelDataDef
 {
 	std::string key;   // canFly
 	std::string type;  // flag | u32 | u8[8] | u32[?]
+	std::string editor;  // how an editor should present it; empty for the default
 };
 
 struct ModuleDef

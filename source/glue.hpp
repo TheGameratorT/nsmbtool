@@ -123,6 +123,7 @@ struct LevelDataEntry
 	std::uint32_t hash = 0;
 	LevelDataType type;
 	std::string module;
+	std::string editor;  // viewMask, or empty for the editor's default
 };
 
 // Everything the emitters need, resolved and ordered.

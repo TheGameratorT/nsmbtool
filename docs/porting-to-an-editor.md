@@ -145,6 +145,24 @@ show the payload as raw bytes and let it be edited that way. NSMBe5 does exactly
 falls back to raw bytes whenever the stored payload disagrees in size with the declaration, on the
 grounds that showing something wrong as if it were right is worse than showing bytes.
 
+### Editor hints
+
+An entry may carry an `editor`, which is the module asking for something better than the default
+control for its shape. The one there is:
+
+| `editor` | Shape | Present it as |
+|---|---|---|
+| `viewMask` | a `value` of `u8`, `u16` or `u32` | one checkbox per view the area has, where bit n is view n |
+
+A view mask is little-endian like every other payload. List the views the level actually holds, by
+id, so that a change to the area's views changes the list. A bit set for a view the area does not
+have is still data: keep it, and say it is there, rather than clearing it because no checkbox shows
+it. An absent key reads as no bits set, and ticking the first box adds it.
+
+**Fall back on a name you do not know.** A hint only changes how a payload is shown, never what it
+holds, so the default control for the shape is always a correct way to edit it. Refusing the whole
+catalog over a newer hint would be refusing a document that is otherwise perfectly readable.
+
 ### The preservation rule
 
 **A key the build does not declare must survive a save untouched.** The level was authored against

@@ -48,6 +48,10 @@
           "type": "integer",
           "minimum": 1,
           "description": "Element count. Present only for `array`."
+        },
+        "editor": {
+          "enum": ["viewMask"],
+          "description": "How the module asks an editor to present the key; absent for the editor's default. `viewMask` is a `value` of `u8`, `u16` or `u32` in which bit n stands for the level's view n, best edited as one checkbox per view the area has. An editor that does not know the name falls back to its default for the key's shape, which is always correct, only less convenient."
         }
       }
     }

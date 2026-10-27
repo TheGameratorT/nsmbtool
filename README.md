@@ -173,6 +173,9 @@ level-data:              # module level
   canDie: u32            # a value
   someArray: u8[8]       # a fixed array
   someVector: u32[?]     # a count, then that many elements
+  safeViews:             # the long form, for a key that says how to edit it
+    type: u32
+    editor: viewMask     # bit n is view n: one checkbox per view of the area
 
 components:
   - Vanilla:

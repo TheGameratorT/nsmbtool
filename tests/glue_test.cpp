@@ -604,6 +604,28 @@ int main()
 			"level_data.json carries the arity of a fixed array");
 	}
 
+	// --- editor hints --------------------------------------------------------
+
+	{
+		const nsmb::GlueModel hinted = nsmb::buildModel(nsmb::readGraph(writeFile("editor.json", R"({
+  "schema": "ncpatcher.modules/1",
+  "modules": [ { "key": "coop", "id": "Coop", "enabled": true,
+    "extra": { "level-data": { "plain": "u32", "views": { "type": "u16", "editor": "viewMask" } } },
+    "components": [] } ]
+})")));
+
+		check(hinted.levelData.size() == 2 && hinted.levelData[1].key == "coop.views"
+			&& hinted.levelData[1].type.name == "u16" && hinted.levelData[1].editor == "viewMask",
+			"the long form of a level-data key carries its type and its editor");
+		check(hinted.levelData[0].editor.empty(), "the short form has no editor");
+
+		const std::string json = nsmb::emitLevelDataJson(hinted);
+		check(json.find("\"typeName\": \"u16\",\n      \"editor\": \"viewMask\"") != std::string::npos,
+			"level_data.json carries the editor after the type");
+		check(json.find("\"editor\"") == json.rfind("\"editor\""),
+			"level_data.json names an editor only for the key that asked for one");
+	}
+
 	// --- refusals ------------------------------------------------------------
 
 	{
@@ -632,6 +654,27 @@ int main()
     "extra": { "level-data": { "oops": "u8[]" } }, "components": [] } ]
 })", message) && message.find("oops") != std::string::npos,
 			"a level-data type with empty brackets names the key it came from");
+
+		check(rejectsGraph("bad-editor.json", R"({
+  "schema": "ncpatcher.modules/1",
+  "modules": [ { "key": "coop", "id": "Coop", "enabled": true,
+    "extra": { "level-data": { "views": { "type": "u32", "editor": "slider" } } }, "components": [] } ]
+})", message) && message.find("slider") != std::string::npos,
+			"an editor that does not exist is refused by name");
+
+		check(rejectsGraph("bad-mask-type.json", R"({
+  "schema": "ncpatcher.modules/1",
+  "modules": [ { "key": "coop", "id": "Coop", "enabled": true,
+    "extra": { "level-data": { "views": { "type": "s32", "editor": "viewMask" } } }, "components": [] } ]
+})", message) && message.find("views") != std::string::npos,
+			"a view mask that is not an unsigned integer is refused");
+
+		check(rejectsGraph("bad-long-form.json", R"({
+  "schema": "ncpatcher.modules/1",
+  "modules": [ { "key": "coop", "id": "Coop", "enabled": true,
+    "extra": { "level-data": { "views": { "editor": "viewMask", "colour": "red" } } }, "components": [] } ]
+})", message) && message.find("colour") != std::string::npos,
+			"the long form refuses a field it does not know");
 
 		check(rejectsGraph("bad-obj-type.json", R"({
   "schema": "ncpatcher.modules/1",

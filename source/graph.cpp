@@ -157,12 +157,37 @@ Graph readGraph(const fs::path& file)
 			{
 				LevelDataDef entry;
 				entry.key = it->first.Scalar();
-				if (!it->second.IsScalar() || it->second.Scalar().empty())
+				const std::string keyWhere = moduleWhere + "'s " ANSI_bCYAN "level-data" ANSI_RESET
+					" key " ANSI_bWHITE + entry.key + ANSI_RESET;
+
+				// Either `key: type`, or `key: { type, editor }` when the key
+				// says how it should be edited.
+				YAML::Node typeNode = it->second;
+				if (it->second.IsMap())
 				{
-					fail(file, moduleWhere + "'s " ANSI_bCYAN "level-data" ANSI_RESET " key "
-						ANSI_bWHITE + entry.key + ANSI_RESET " has no type.");
+					for (auto field = it->second.begin(); field != it->second.end(); ++field)
+					{
+						const std::string name = field->first.Scalar();
+						if (name != "type" && name != "editor")
+						{
+							fail(file, keyWhere + " has " ANSI_bWHITE + name + ANSI_RESET
+								", which is neither " ANSI_bCYAN "type" ANSI_RESET " nor "
+								ANSI_bCYAN "editor" ANSI_RESET ".");
+						}
+					}
+					// reset, not =, which would write through to the map itself.
+					typeNode.reset(it->second["type"]);
+					const YAML::Node editor = it->second["editor"];
+					if (editor && !editor.IsNull())
+					{
+						if (!editor.IsScalar() || editor.Scalar().empty())
+							fail(file, keyWhere + " has an " ANSI_bCYAN "editor" ANSI_RESET " that is not a name.");
+						entry.editor = editor.Scalar();
+					}
 				}
-				entry.type = it->second.Scalar();
+				if (!typeNode || !typeNode.IsScalar() || typeNode.Scalar().empty())
+					fail(file, keyWhere + " has no type.");
+				entry.type = typeNode.Scalar();
 				module.levelData.push_back(std::move(entry));
 			}
 		}

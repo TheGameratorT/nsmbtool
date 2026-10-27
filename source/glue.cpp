@@ -372,6 +372,28 @@ GlueModel buildModel(const Graph& graph)
 					+ e.what());
 			}
 
+			if (!declared.editor.empty())
+			{
+				const std::string where = "Module " ANSI_bWHITE + module.id + ANSI_RESET
+					"'s level-data key " ANSI_bWHITE + declared.key + ANSI_RESET;
+				if (declared.editor != "viewMask")
+				{
+					throw nsmb::exception(where + " asks for the editor " ANSI_bWHITE + declared.editor
+						+ ANSI_RESET ", which is not one there is.\n"
+						"       The only one is " ANSI_bCYAN "viewMask" ANSI_RESET ".");
+				}
+				// Bit n is view n, so the value has to be an unsigned integer
+				// an editor can size and the game can shift into.
+				const std::string& name = entry.type.name;
+				if (entry.type.kind != LevelDataKind::Value || (name != "u8" && name != "u16" && name != "u32"))
+				{
+					throw nsmb::exception(where + " is a " ANSI_bCYAN "viewMask" ANSI_RESET
+						", which needs the type " ANSI_bCYAN "u8" ANSI_RESET ", " ANSI_bCYAN "u16" ANSI_RESET
+						" or " ANSI_bCYAN "u32" ANSI_RESET ".");
+				}
+				entry.editor = declared.editor;
+			}
+
 			model.levelData.push_back(std::move(entry));
 		}
 	}
@@ -809,6 +831,8 @@ std::string emitLevelDataJson(const GlueModel& model)
 			out << ",\n      \"typeName\": " << jsonString(entry.type.name);
 		if (entry.type.size.has_value())
 			out << ",\n      \"arraySize\": " << *entry.type.size;
+		if (!entry.editor.empty())
+			out << ",\n      \"editor\": " << jsonString(entry.editor);
 		out << "\n    }" << (i + 1 == model.levelData.size() ? "" : ",") << "\n";
 	}
 
